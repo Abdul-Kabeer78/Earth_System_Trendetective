@@ -1,4 +1,3 @@
-import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import type {
   LocationIntelligence,
   PlanetaryOverviewPayload,
@@ -8,22 +7,62 @@ import {
   fetchLocationIntelligence,
   GLOBAL_REFERENCE_STATIONS,
 } from './connectors.ts';
+import { fetchWithTimeout } from './cache.ts';
 
-function getAiClient(): GoogleGenAI {
-  const apiKey = process.env.GEMINI_API_KEY?.trim();
-  if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
-    throw new Error(
-      'GEMINI_API_KEY is not configured on the server. Add it to your .env file (or Settings > Secrets in AI Studio).'
-    );
+interface OpenRouterChatCompletion {
+  choices?: Array<{
+    message?: {
+      content?: string;
+    };
+  }>;
+  error?: {
+    message?: string;
+  };
+}
+
+function getConfiguredAiProvider():
+  | {
+      provider: 'openrouter' | 'gemini';
+      apiKey: string;
+      model: string;
+    }
+  | null {
+  const openRouterKey = process.env.OPENROUTER_API_KEY?.trim();
+  if (openRouterKey && openRouterKey !== 'your_api_key_here') {
+    return {
+      provider: 'openrouter',
+      apiKey: openRouterKey,
+      model: process.env.OPENROUTER_MODEL?.trim() || 'openai/gpt-4o-mini',
+    };
   }
-  return new GoogleGenAI({
-    apiKey,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      },
-    },
-  });
+
+  const geminiKey =
+    process.env.GEMINI_API_KEY?.trim() || process.env.GOOGLE_API_KEY?.trim();
+  if (geminiKey && geminiKey !== 'your_api_key_here') {
+    return {
+      provider: 'gemini',
+      apiKey: geminiKey,
+      model:
+        process.env.GEMINI_MODEL?.trim() ||
+        process.env.GOOGLE_MODEL?.trim() ||
+        'gemini-2.5-flash',
+    };
+  }
+
+  return null;
+}
+
+function buildMissingApiKeyResponse(): {
+  answer: string;
+  referencedSources: string[];
+  generatedAt: string;
+} {
+  return {
+    answer:
+      'AI Detective is currently unavailable because no AI provider key is configured on the server. Add OPENROUTER_API_KEY or GEMINI_API_KEY (or GOOGLE_API_KEY) to your .env file and restart the app to enable live climate and environmental analysis.',
+    referencedSources: [],
+    generatedAt: new Date().toISOString(),
+  };
 }
 
 async function resolveCityToCoords(
@@ -77,7 +116,12 @@ export async function runEarthAiDetective(params: {
   referencedSources: string[];
   generatedAt: string;
 }> {
-  const ai = getAiClient();
+  const configuredAi = getConfiguredAiProvider();
+  if (!configuredAi) {
+    return buildMissingApiKeyResponse();
+  }
+
+  const { provider, apiKey, model } = configuredAi;
   const overview: PlanetaryOverviewPayload = await buildPlanetaryOverview();
 
   let primaryLocation: LocationIntelligence | null = null;
@@ -210,39 +254,72 @@ export async function runEarthAiDetective(params: {
 
   const userPayload = `LIVE_TELEMETRY_JSON:\n${JSON.stringify(groundedContext)}${historyText}\n\nUSER REQUEST (${params.mode ?? 'chat'}):\n${params.prompt}`;
 
-  const callModel = async (modelName: string) =>
-    ai.models.generateContent({
-      model: modelName,
-      contents: userPayload,
-      config: {
-        systemInstruction,
-        thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+  let answer: string;
+
+  if (provider === 'openrouter') {
+    const response = await fetchWithTimeout(
+      'https://openrouter.ai/api/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer':
+            process.env.APP_URL?.trim() || 'http://localhost:3000',
+          'X-Title': 'Earth System Trend Detective',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: systemInstruction },
+            { role: 'user', content: userPayload },
+          ],
+        }),
       },
+      60000
+    );
+    const completion = (await response.json()) as OpenRouterChatCompletion;
+
+    if (!response.ok) {
+      throw new Error(
+        completion.error?.message ||
+          `OpenRouter request failed with HTTP ${response.status}.`
+      );
+    }
+
+    answer = completion.choices?.[0]?.message?.content?.trim() ?? '';
+    if (!answer) {
+      throw new Error('OpenRouter returned an empty response.');
+    }
+  } else {
+    const { GoogleGenAI } = await import('@google/genai');
+    const ai = new GoogleGenAI({ apiKey });
+    const response = await ai.models.generateContent({
+      model,
+      contents: [
+        { role: 'user', parts: [{ text: `${systemInstruction}\n\n${userPayload}` }] },
+      ],
     });
 
-  let response;
-  try {
-    response = await callModel('gemini-4-hydrogen');
-  } catch (err: unknown) {
-    const msg = String(err);
-    if (
-      msg.includes('503') ||
-      msg.includes('UNAVAILABLE') ||
-      msg.includes('high demand')
-    ) {
-      response = await ai.models.generateContent({
-        model: 'gemini-3.1-flash-lite',
-        contents: userPayload,
-        config: { systemInstruction },
-      });
-    } else {
-      throw err;
-    }
-  }
+    const extractedText =
+      response.text?.trim() ||
+      response.candidates
+        ?.map((candidate) =>
+          candidate.content?.parts
+            ?.map((part) => part.text ?? '')
+            .join('')
+            .trim()
+        )
+        .filter(Boolean)
+        .join('\n\n')
+        .trim();
 
-  const answer =
-    response.text?.trim() ||
-    'Unable to synthesize environmental briefing from the current telemetry snapshot.';
+    if (!extractedText) {
+      throw new Error('Gemini returned an empty response.');
+    }
+
+    answer = extractedText;
+  }
 
   const referencedSources = overview.sources
     .filter((s) => s.status === 'live')

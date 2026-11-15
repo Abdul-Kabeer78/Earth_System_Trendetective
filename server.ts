@@ -35,15 +35,26 @@ app.use(express.json({ limit: '2mb' }));
 
 // Health endpoint
 app.get('/api/health', (_req, res) => {
-  const geminiKey = process.env.GEMINI_API_KEY?.trim() || '';
+  const openRouterKey = process.env.OPENROUTER_API_KEY?.trim() || '';
+  const geminiKey =
+    process.env.GEMINI_API_KEY?.trim() || process.env.GOOGLE_API_KEY?.trim() || '';
   const mapsKey =
     process.env.VITE_GOOGLE_MAPS_API_KEY?.trim() ||
     process.env.GOOGLE_MAPS_API_KEY?.trim() ||
     '';
+  const aiProvider = openRouterKey && openRouterKey !== 'your_api_key_here'
+    ? 'openrouter'
+    : geminiKey && geminiKey !== 'your_api_key_here'
+      ? 'gemini'
+      : 'none';
   res.json({
     status: 'ok',
     databaseConfigured: isDatabaseConfigured(),
-    geminiConfigured: Boolean(geminiKey && geminiKey !== 'MY_GEMINI_API_KEY'),
+    aiProvider,
+    openRouterConfigured: Boolean(
+      openRouterKey && openRouterKey !== 'your_api_key_here'
+    ),
+    geminiConfigured: Boolean(geminiKey && geminiKey !== 'your_api_key_here'),
     googleMapsConfigured: Boolean(mapsKey && mapsKey !== 'MY_GOOGLE_MAPS_API_KEY'),
     timestamp: new Date().toISOString(),
   });
@@ -435,7 +446,7 @@ app.get('/api/observations', async (_req, res) => {
   }
 });
 
-// Earth AI Detective (Gemini 4 Hydrogen grounded in live telemetry)
+// Earth AI Detective (OpenRouter grounded in live telemetry)
 app.post('/api/ai/detective', async (req, res) => {
   const { prompt, mode, selectedLocation, compareCities, history } = req.body ?? {};
   if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
@@ -454,7 +465,7 @@ app.post('/api/ai/detective', async (req, res) => {
   } catch (error: any) {
     console.error('Earth AI Detective error:', error);
     const msg = error?.message || 'Earth AI Detective failed to generate response.';
-    const status = msg.includes('GEMINI_API_KEY') ? 503 : 500;
+    const status = msg.includes('OPENROUTER_API_KEY') ? 503 : 500;
     res.status(status).json({ error: msg });
   }
 });

@@ -34,6 +34,15 @@ export const AiDetectiveView: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const displayError = error
+    ? error.includes('OPENROUTER_API_KEY') ||
+        error.includes('GEMINI_API_KEY') ||
+        error.includes('GOOGLE_API_KEY') ||
+        error.includes('no AI provider key')
+      ? 'AI Detective is unavailable because no AI provider key is configured on the server. Add OPENROUTER_API_KEY or GEMINI_API_KEY (or GOOGLE_API_KEY) to the .env file and restart the app to enable live analysis.'
+      : error
+    : null;
+
   const [cityA, setCityA] = useState('Karachi');
   const [cityB, setCityB] = useState('London');
 
@@ -236,9 +245,9 @@ export const AiDetectiveView: React.FC = () => {
               </div>
             )}
 
-            {error && (
+            {displayError && (
               <div className="p-3 rounded-lg border border-rose-500/40 bg-rose-950/30 text-xs text-rose-200">
-                {error}
+                {displayError}
               </div>
             )}
           </div>

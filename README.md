@@ -24,7 +24,10 @@ cp .env.example .env
 
 Fill in the keys in `.env`:
 - `VITE_GOOGLE_MAPS_API_KEY`: Google Maps Platform key (for Maps JS, Places, Geocoding, Elevation, Weather, Air Quality, Pollen, Solar, Time Zone).
-- `GEMINI_API_KEY`: Gemini API key (for **Earth AI Detective** and AI Environmental Impact Reports).
+- `OPENROUTER_API_KEY`: Optional OpenRouter API key for **Earth AI Detective** and AI Environmental Impact Reports. Keep this key in `.env`; it is used only by the server.
+- `OPENROUTER_MODEL`: Optional OpenRouter model ID (defaults to `openai/gpt-4o-mini`).
+- `GEMINI_API_KEY` or `GOOGLE_API_KEY`: Optional Google AI Studio / Gemini API key. The app automatically falls back to Gemini when OpenRouter is not configured.
+- `GEMINI_MODEL` or `GOOGLE_MODEL`: Optional Gemini model ID (defaults to `gemini-2.5-flash`).
 - **Optional keys** (live key-free NASA, NOAA, Open-Meteo, USGS, Copernicus Sentinel, and Global Forest Watch feeds already run out of the box):
   - `NASA_FIRMS_MAP_KEY` (optional VIIRS 375m upgrade; key-free MODIS C6.1 NRT runs automatically)
   - `OPENWEATHER_API_KEY` (optional secondary meteorology cross-check)
