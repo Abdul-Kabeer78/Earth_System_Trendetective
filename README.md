@@ -48,3 +48,9 @@ Then open **http://localhost:3000** (or check `/api/health` for setup diagnostic
 - `npm run lint` / `npm run typecheck` — Runs TypeScript validation (`tsc --noEmit`)
 - `npm run build` — Builds the production frontend bundle into `dist/`
 - `npx drizzle-kit push --config=src/db/drizzle.config.ts` — Pushes PostgreSQL schema (only needed if `DATABASE_URL` or `SQL_*` is configured)
+
+## Deploy on Vercel
+- Import `Abdul-Kabeer78/Earth_System_Trendetective` from GitHub.
+- Keep the Vite build output directory as `dist`. The `api/` function serves Express API routes.
+- Add required keys in the Vercel project's Environment Variables settings; do not upload `.env` values or `.env.example`.
+- The project URL must use lowercase letters and hyphens, for example `earth-system-trendetective.vercel.app`.
