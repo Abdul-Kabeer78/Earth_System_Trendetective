@@ -5,7 +5,7 @@ AI-powered real-time Earth monitoring, geospatial satellite intelligence, and cl
 ## Run in VS Code (Quick Start)
 
 ### Prerequisites
-- **Node.js 20+** (`node -v`) and **npm**
+- **Node.js 24.x** (`node -v`) and **npm**
 - **VS Code**
 
 ### 1. Install Dependencies
